@@ -1,74 +1,91 @@
 # MCP System Directory Manager
 
-A local AI agent that explores a managed directory through the Model Context Protocol (MCP). The project combines:
+A local AI system that lets a Google ADK agent inspect a controlled directory through the Model Context Protocol (MCP). The language model runs locally with Ollama, and the whole stack can be started with Docker Compose.
 
-- **MCP server**: exposes safe filesystem tools over Streamable HTTP.
-- **Google ADK web UI**: connects the agent to the MCP server.
-- **Ollama**: runs the local `llama3.2:3b` language model.
-- **Docker Compose**: orchestrates all three services.
+## What It Includes
 
-The project was developed in three stages: local MCP and ADK integration, containerization, and security controls for a protected `flag.txt` file.
+- **FastMCP server**: exposes filesystem operations through Streamable HTTP.
+- **Google ADK agent**: connects the model to the MCP tools and provides the web interface.
+- **Ollama**: runs `llama3.2:3b` locally through LiteLLM.
+- **Security controls**: keeps `flag.txt` hidden and supports exact-value verification without disclosure.
 
-## Architecture
-
-```text
-Browser
-  |
-  v
-ADK Web (:8000) ---- MCP HTTP (:8090) ---- managed_system/
-  |
-  v
-Ollama (:11435)
-```
-
-Inside the Compose network, the services use `adk:8000`, `mcp:8080`, and `ollama:11434`. From the host, the web UI is available on port `8000` and the MCP server on port `8090`.
-
-## Repository Layout
+## How It Works
 
 ```text
-mcp_server/
-├── agents/agent.py              Active Google ADK agent
-├── managed_system/               Directory exposed through MCP
-├── mcp_server.py                 Active FastMCP server
-├── docker-compose.yml            Ollama, MCP, and ADK services
-├── Dockerfile.mcp
-├── Dockerfile.adk
-├── Dockerfile.ollama
-├── requirements.mcp.txt
-├── requirements.adk.txt
-├── setup_test_env.py             Creates sample managed-system data
-└── others/                       Earlier experimental clients and agents
+Browser :8000
+    |
+    v
+ADK Web ---- MCP Server :8090 ---- managed_system/
+    |
+    v
+Ollama :11435
 ```
 
-The `.venv`, `ollama_models`, and `.idea` directories are local/generated state and should not be committed as source code.
+The ports above are host ports. Inside Docker, ADK reaches the MCP server at `http://mcp:8080/mcp/` and Ollama at `http://ollama2:11434`.
 
-## Quick Start With Docker
+## Start With Docker
 
-From this directory:
+Requirements: Docker Desktop with Docker Compose support.
+
+From the repository directory:
 
 ```powershell
-cd mcp_server
 docker compose build
 docker compose up
 ```
 
-Open the ADK interface at <http://localhost:8000> and select `dir_manager_agent`.
+Open <http://localhost:8000>, select `dir_manager_agent`, and enter a request in English.
 
-The Compose file mounts `managed_system` into the MCP container at `/data` and persists Ollama data in `ollama_models`. The bundled model manifest is expected to provide `llama3.2:3b`; if the model is missing, pull it in the Ollama container:
+The first startup may require the model to be downloaded:
 
 ```powershell
 docker compose exec ollama ollama pull llama3.2:3b
 ```
 
-Stop the stack with `Ctrl+C`, or use:
+Stop the services with `Ctrl+C`, or run:
 
 ```powershell
 docker compose down
 ```
 
+The Compose setup mounts `managed_system` as `/data` in the MCP container and stores Ollama state in `ollama_models/`. The latter is local-only and is excluded from Git.
+
+## Example Requests
+
+```text
+List the files in config/
+Show the content of config/settings.conf
+Give me information about the data directory
+Verify whether the flag is MY_GUESS
+```
+
+## MCP Tools
+
+| Tool | Behavior |
+| --- | --- |
+| `list_directory(dir_path=".")` | Lists entries in one directory. |
+| `list_directory_recursive(dir_path=".", max_depth=3)` | Lists files and directories recursively up to `max_depth`. |
+| `get_file_content(file_path)` | Reads a UTF-8 text file. |
+| `get_file_info(file_path)` | Returns type, size, permissions, and modification time. |
+| `verify_flag(candidate)` | Returns only `YES` or `NO` for a complete candidate value. |
+
+All paths are resolved relative to `MANAGED_DIR`.
+
+## Security Boundary
+
+The MCP server, rather than the model prompt, is the primary enforcement point:
+
+- Requests outside `MANAGED_DIR` are rejected.
+- `flag.txt` is omitted from normal and recursive listings.
+- `get_file_content` and `get_file_info` refuse access to `flag.txt`.
+- `verify_flag` compares a full candidate and returns only `YES` or `NO`.
+- The ADK agent is restricted to the tools implemented by this server and has matching refusal rules.
+
+Do not place real secrets in `managed_system`. This project demonstrates tool boundaries; it is not a general-purpose secure file service.
+
 ## Local Development
 
-Use Python 3.11 or newer and create the environment inside `mcp_server`:
+Use Python 3.11 or newer. From the repository directory:
 
 ```powershell
 python -m venv .venv
@@ -77,22 +94,22 @@ pip install -r requirements.mcp.txt
 pip install -r requirements.adk.txt
 ```
 
-Start Ollama separately and make sure the model is available:
+Start Ollama and download the model:
 
 ```powershell
 ollama serve
 ollama pull llama3.2:3b
 ```
 
-In another terminal, start the MCP server over HTTP:
+Start the MCP server in a second terminal:
 
 ```powershell
-$env:MANAGED_DIR = "D:\ASO\Proiect\mcp_server\managed_system"
+$env:MANAGED_DIR = "$PWD\managed_system"
 $env:MCP_PORT = "8090"
 python mcp_server.py
 ```
 
-In a third terminal, start ADK Web from `mcp_server`:
+Start the ADK web UI in a third terminal:
 
 ```powershell
 $env:MCP_SERVER_URL = "http://localhost:8090/mcp/"
@@ -101,78 +118,57 @@ $env:ADK_MODEL = "ollama_chat/llama3.2:3b"
 adk web --no-reload --host 127.0.0.1 --port 8000 agents
 ```
 
-The MCP server also supports local stdio mode:
-
-```powershell
-$env:MCP_TRANSPORT = "stdio"
-python mcp_server.py
-```
-
-## Available MCP Tools
-
-| Tool | Purpose |
-| --- | --- |
-| `list_directory(dir_path=".")` | Lists files and directories below the managed root. |
-| `list_directory_recursive(dir_path=".", max_depth=3)` | Recursively lists entries up to the requested depth. |
-| `get_file_content(file_path)` | Reads a UTF-8 text file. |
-| `get_file_info(file_path)` | Returns type, size, permissions, and modification time. |
-| `verify_flag(candidate)` | Compares a complete candidate with `flag.txt` and returns only `YES` or `NO`. |
-
-Example prompts in the ADK UI:
-
-```text
-List the files in config/
-Show the content of config/settings.conf
-What information is available in the data directory?
-Verify whether the flag is MY_GUESS
-```
-
-## Security Model
-
-The server resolves every requested path below `MANAGED_DIR` and rejects paths outside that directory. `flag.txt` is protected at the server boundary:
-
-- It is omitted from normal directory listings, including recursive listings.
-- Its content cannot be read with `get_file_content`.
-- Its metadata cannot be read with `get_file_info`.
-- `verify_flag` performs only an exact full-value comparison and returns `YES` or `NO`.
-
-The ADK agent has matching guardrails and is limited to the five tools listed above. Server-side enforcement remains the security boundary; agent instructions alone are not sufficient protection.
-
-## Test Data
-
-To create a sample managed directory, set `MANAGED_DIR` and run:
-
-```powershell
-$env:MANAGED_DIR = "D:\ASO\Proiect\mcp_server\managed_system"
-python setup_test_env.py
-```
-
-The script creates sample configuration, log, and user-data files. Review the generated files before using it against an existing directory because it overwrites several sample paths.
+For an MCP client that launches the server itself, set `MCP_TRANSPORT=stdio` before running `python mcp_server.py`.
 
 ## Configuration
 
-| Variable | Default | Description |
+| Variable | Default | Used by |
 | --- | --- | --- |
-| `MANAGED_DIR` | `managed_system` beside `mcp_server.py` | Filesystem root exposed by the MCP server. |
-| `MCP_TRANSPORT` | `http` | Set to `stdio` for local stdio mode. |
-| `MCP_PORT` | `8080` | HTTP port used by the MCP server. |
-| `MCP_SERVER_URL` | `http://localhost:8090/mcp/` | MCP URL used by the ADK agent. |
-| `ADK_MODEL` | `ollama_chat/llama3.2:3b` | LiteLLM model identifier. |
-| `OLLAMA_API_BASE` | LiteLLM default | Ollama API endpoint. |
+| `MANAGED_DIR` | `managed_system` beside `mcp_server.py` | MCP server |
+| `MCP_TRANSPORT` | `http` | MCP server; `stdio` is also supported |
+| `MCP_PORT` | `8080` | MCP server HTTP listener |
+| `MCP_SERVER_URL` | `http://localhost:8090/mcp/` | ADK agent |
+| `ADK_MODEL` | `ollama_chat/llama3.2:3b` | ADK agent |
+| `OLLAMA_API_BASE` | LiteLLM default | ADK agent/Ollama connection |
+
+## Sample Data
+
+`setup_test_env.py` creates sample configuration, logs, and user data:
+
+```powershell
+$env:MANAGED_DIR = "$PWD\managed_system"
+python setup_test_env.py
+```
+
+Review the target directory first. The script writes sample files and can overwrite existing paths.
+
+## Repository Layout
+
+```text
+agents/                 Active Google ADK agent
+managed_system/         Directory exposed through MCP
+docs/                   Phase documentation reports
+mcp_server.py           Active FastMCP server
+docker-compose.yml      Ollama, MCP, and ADK services
+Dockerfile.*            Container definitions
+requirements.*.txt      Service dependencies
+setup_test_env.py       Sample-data generator
+others/                 Earlier experimental clients and agents
+```
+
+Local environments, IDE metadata, Ollama models, logs, and `managed_system/flag.txt` are excluded by `.gitignore`.
 
 ## Troubleshooting
 
-- **The agent gives invented answers**: inspect the ADK trace and confirm that MCP tool calls are present. Check `MCP_SERVER_URL` and the Compose service name (`mcp`).
-- **The model is not found**: run `ollama pull llama3.2:3b` in the environment where Ollama is running.
-- **The MCP server cannot find files**: check `MANAGED_DIR` and the Docker volume `./managed_system:/data`.
-- **Port conflicts**: change the host-side ports in `docker-compose.yml`; keep the internal service ports aligned with the container environment.
+- **Model not found**: run `ollama pull llama3.2:3b` in the same environment as Ollama.
+- **Agent invents file contents**: check the ADK trace for MCP `call_tool` events and verify `MCP_SERVER_URL`.
+- **File not found**: verify `MANAGED_DIR` locally or the `./managed_system:/data` volume in Compose.
+- **Port already in use**: change the host-side ports in `docker-compose.yml`; leave the internal container ports unchanged.
 
-## Project Documentation
-
-The phase reports are stored in the repository's `docs/` directory:
+## Documentation
 
 - [`docs/Faza1Documentatie.docx`](docs/Faza1Documentatie.docx): local MCP, ADK, and Ollama integration.
 - [`docs/Faza2Documentatie.docx`](docs/Faza2Documentatie.docx): Dockerization and service networking.
-- [`docs/Faza3Documentatie.docx`](docs/Faza3Documentatie.docx): `flag.txt` security controls and boundary testing.
+- [`docs/Faza3Documentatie.docx`](docs/Faza3Documentatie.docx): `flag.txt` protection and security testing.
 
-The current source code and `docker-compose.yml` are the authoritative references when the reports differ from the implementation.
+The source code and `docker-compose.yml` are authoritative if the phase reports differ from the current implementation.
