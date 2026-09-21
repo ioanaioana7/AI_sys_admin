@@ -1,0 +1,23 @@
+# Dockerfile.adk
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1
+
+# Instalam dependențele
+COPY requirements.adk.txt .
+RUN pip install --no-cache-dir -r requirements.adk.txt
+
+# Copiem codul agentului ADK
+COPY agents ./agents
+
+# Variabile pentru model și MCP
+ENV ADK_MODEL=ollama_chat/llama3.2:3b
+ENV OLLAMA_API_BASE=http://ollama:11434
+# URL-ul MCP-ului
+ENV MCP_SERVER_URL=http://mcp:8080/mcp/
+
+EXPOSE 8000
+CMD ["adk", "web", "--no-reload", "--host", "0.0.0.0", "--port", "8000"]
+

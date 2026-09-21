@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+.idea/
+
+# Local Ollama models and credentials are large and must not be published.
+ollama_models/
+
+# The protected challenge value must remain local.
+managed_system/flag.txt
+
+# Local logs and environment files.
+*.log
+.env
+.env.*
+!.env.example

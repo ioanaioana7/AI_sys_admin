@@ -1,0 +1,10 @@
+# Imagine de baza Ollama
+FROM ollama/ollama:latest
+
+#RUN ollama pull llama3.2:3b
+
+# Expunem portul API Ollama
+EXPOSE 11434
+
+# Comanda de rulare
+ENTRYPOINT ["ollama", "serve"]

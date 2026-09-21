@@ -1,0 +1,48 @@
+services:
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    container_name: ollama2
+    volumes:
+    - ./ollama_models:/root/.ollama
+    restart: unless-stopped
+    ports:
+      - "11435:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: mcp_server
+    restart: unless-stopped
+    environment:
+      - MANAGED_DIR=/data
+      - PORT=8080
+    volumes:
+      - ./managed_system:/data
+    ports:
+      - "8090:8080"
+
+  adk:
+    build:
+      context: .
+      dockerfile: Dockerfile.adk
+    container_name: adk_web
+    restart: unless-stopped
+    environment:
+    - ADK_MODEL=ollama_chat/llama3.2:3b
+    - OLLAMA_API_BASE=http://ollama2:11434
+    - MCP_SERVER_URL=http://mcp:8080/mcp/
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mcp
+      - ollama
