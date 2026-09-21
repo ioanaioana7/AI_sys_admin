@@ -169,10 +169,10 @@ The script creates sample configuration, log, and user-data files. Review the ge
 
 ## Project Documentation
 
-The original phase reports are stored one directory above this project:
+The phase reports are stored in the repository's `docs/` directory:
 
-- `Faza1Documentatie.docx`: local MCP, ADK, and Ollama integration.
-- `Faza2Documentatie.docx`: Dockerization and service networking.
-- `Faza3Documentatie.docx`: `flag.txt` security controls and boundary testing.
+- [`docs/Faza1Documentatie.docx`](docs/Faza1Documentatie.docx): local MCP, ADK, and Ollama integration.
+- [`docs/Faza2Documentatie.docx`](docs/Faza2Documentatie.docx): Dockerization and service networking.
+- [`docs/Faza3Documentatie.docx`](docs/Faza3Documentatie.docx): `flag.txt` security controls and boundary testing.
 
 The current source code and `docker-compose.yml` are the authoritative references when the reports differ from the implementation.
